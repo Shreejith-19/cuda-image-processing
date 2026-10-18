@@ -73,6 +73,70 @@ target_link_libraries(benchmark_mean_blur PRIVATE
     cuda_image_proc
 )
 
+# Test Executable: 3x3 Gaussian Blur CPU Reference vs. Naive CUDA vs. Tiled Suite
+add_executable(test_gaussian_blur
+    tests/test_gaussian_blur.cpp
+)
+
+target_link_libraries(test_gaussian_blur PRIVATE
+    cuda_image_proc
+)
+
+# Benchmark Executable: Profiling 3x3 Gaussian Blur Naive vs. Tiled Shared Memory
+add_executable(benchmark_gaussian_blur
+    benchmarks/benchmark_gaussian_blur.cpp
+)
+
+target_link_libraries(benchmark_gaussian_blur PRIVATE
+    cuda_image_proc
+)
+
+# Test Executable: Sobel Edge Detection CPU Reference vs. Naive CUDA vs. Tiled Suite
+add_executable(test_sobel
+    tests/test_sobel.cpp
+)
+
+target_link_libraries(test_sobel PRIVATE
+    cuda_image_proc
+)
+
+# Benchmark Executable: Profiling Sobel Edge Detection Naive vs. Tiled Shared Memory
+add_executable(benchmark_sobel
+    benchmarks/benchmark_sobel.cpp
+)
+
+target_link_libraries(benchmark_sobel PRIVATE
+    cuda_image_proc
+)
+
+# Unified Reusable Benchmark Runner
+add_executable(benchmark_runner
+    benchmarks/benchmark_runner.cpp
+)
+
+target_link_libraries(benchmark_runner PRIVATE
+    cuda_image_proc
+)
+
+# Kernel Fusion Benchmark Executable
+add_executable(benchmark_fusion
+    benchmarks/benchmark_fusion.cpp
+)
+
+target_link_libraries(benchmark_fusion PRIVATE
+    cuda_image_proc
+)
+
+
+# Profiler Target Executable for Nsight Systems and Nsight Compute
+add_executable(profiler_target
+    benchmarks/profiler_target.cu
+)
+
+target_link_libraries(profiler_target PRIVATE
+    cuda_image_proc
+)
+
 # Preserved Smoke Test Executable
 add_executable(smoke_test
     src/smoke_test.cu
@@ -82,9 +146,33 @@ set_target_properties(smoke_test PROPERTIES
     CUDA_SEPARABLE_COMPILATION OFF
 )
 
+# Robustness & Correctness Test Suite Executable
+add_executable(test_robustness
+    tests/test_robustness.cpp
+)
+
+target_link_libraries(test_robustness PRIVATE
+    cuda_image_proc
+)
+
+# Kernel Fusion Test Suite Executable
+add_executable(test_fusion
+    tests/test_fusion.cpp
+)
+
+target_link_libraries(test_fusion PRIVATE
+    cuda_image_proc
+)
 
 # Enable CTest
 enable_testing()
 add_test(NAME TestGrayscaleSuite COMMAND test_grayscale)
 add_test(NAME TestMeanBlurSuite COMMAND test_mean_blur)
+add_test(NAME TestGaussianBlurSuite COMMAND test_gaussian_blur)
+add_test(NAME TestSobelSuite COMMAND test_sobel)
+add_test(NAME TestRobustnessSuite COMMAND test_robustness)
+add_test(NAME TestFusionSuite COMMAND test_fusion)
+
+
+
 

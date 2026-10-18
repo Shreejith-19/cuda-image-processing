@@ -36,6 +36,8 @@ env/
 
 # Output directories & benchmark data
 output/
+images/output/*
+!images/output/.gitkeep
 results/
 data/output/
 *.log

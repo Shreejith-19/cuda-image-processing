@@ -16,22 +16,23 @@ using namespace cuda_image_proc;
 void print_usage(const char* prog_name) {
     std::cout << "Usage: " << prog_name << " [options]\n"
               << "Options:\n"
-              << "  --mode <cpu|cuda|both>       Execution target (default: both)\n"
-              << "  --op <grayscale|blur|both>   Operation to execute (default: both)\n"
-              << "  --filter-size <3|5|...>      Odd filter dimension for mean blur (default: 3)\n"
-              << "  --input <path>               Path to input image (default: images/input/sample.png)\n"
-              << "  --output <path>              Path to output image (default: images/output/result.png)\n"
-              << "  --help                       Show this help message\n";
+              << "  --mode <cpu|cuda|both>                     Execution target (default: both)\n"
+              << "  --op <grayscale|blur|gaussian|sobel|both>  Operation to execute (default: both)\n"
+              << "  --filter-size <3|5|...>                    Odd filter dimension for mean blur (default: 3)\n"
+              << "  --input <path>                             Path to input image (default: images/input/sample.png)\n"
+              << "  --output <path>                            Path to output image (default: images/output/result.png)\n"
+              << "  --help                                     Show this help message\n";
 }
 
 int main(int argc, char* argv[]) {
     std::cout << "=================================================================\n";
-    std::cout << " CUDA Image Processing - RGB Grayscale & Mean Blur Accelerator   \n";
+    std::cout << " CUDA Image Processing - Filters & Edge Detection Accelerator    \n";
     std::cout << "=================================================================\n";
 
     std::string mode = "both";
     std::string op = "both";
     int filter_size = 3;
+    bool filter_size_specified = false;
     std::string input_path = "images/input/sample.png";
     std::string output_path = "images/output/result.png";
 
@@ -43,6 +44,7 @@ int main(int argc, char* argv[]) {
             op = argv[++i];
         } else if (arg == "--filter-size" && i + 1 < argc) {
             filter_size = std::stoi(argv[++i]);
+            filter_size_specified = true;
         } else if (arg == "--input" && i + 1 < argc) {
             input_path = argv[++i];
         } else if (arg == "--output" && i + 1 < argc) {
@@ -64,10 +66,61 @@ int main(int argc, char* argv[]) {
         return 1;
     }
 
-    if (op != "grayscale" && op != "blur" && op != "both") {
-        std::cerr << "Invalid op '" << op << "'. Expected 'grayscale', 'blur', or 'both'.\n";
+    if (op != "grayscale" && op != "blur" && op != "gaussian" && op != "sobel" && op != "both") {
+        std::cerr << "Invalid op '" << op << "'. Expected 'grayscale', 'blur', 'gaussian', 'sobel', or 'both'.\n";
         print_usage(argv[0]);
         return 1;
+    }
+
+    // Interactive prompt for filter size when not specified on command-line
+    if (!filter_size_specified && (op == "blur" || op == "both")) {
+        std::cout << "\n[Filter Selection for Mean Blur]\n"
+                  << "Choose filter size (e.g. 3 for 3x3, 5 for 5x5, 7 for 7x7) [default: 3]: ";
+        std::cout.flush();
+        std::string line;
+        if (std::getline(std::cin, line)) {
+            size_t first = line.find_first_not_of(" \t\r\n");
+            size_t last = line.find_last_not_of(" \t\r\n");
+            if (first != std::string::npos && last != std::string::npos) {
+                try {
+                    int val = std::stoi(line.substr(first, last - first + 1));
+                    if (val > 0 && val % 2 != 0) {
+                        filter_size = val;
+                        std::cout << "--> Selected Mean Blur filter size: " << filter_size << "x" << filter_size << "\n\n";
+                    } else {
+                        std::cout << "--> Filter size must be a positive odd integer. Using default: 3x3\n\n";
+                    }
+                } catch (...) {
+                    std::cout << "--> Invalid input. Using default: 3x3\n\n";
+                }
+            } else {
+                std::cout << "--> Using default: 3x3\n\n";
+            }
+        }
+    } else if (!filter_size_specified && op == "gaussian") {
+        std::cout << "\n[Filter Selection for Gaussian Blur]\n"
+                  << "Choose filter size (e.g. 3 for 3x3, 5, 7, 9, 15, 21) [default: 3]: ";
+        std::cout.flush();
+        std::string line;
+        if (std::getline(std::cin, line)) {
+            size_t first = line.find_first_not_of(" \t\r\n");
+            size_t last = line.find_last_not_of(" \t\r\n");
+            if (first != std::string::npos && last != std::string::npos) {
+                try {
+                    int val = std::stoi(line.substr(first, last - first + 1));
+                    if (val > 0 && val % 2 != 0 && val <= 31) {
+                        filter_size = val;
+                        std::cout << "--> Selected Gaussian Blur filter size: " << filter_size << "x" << filter_size << "\n\n";
+                    } else {
+                        std::cout << "--> Gaussian blur supports positive odd integers up to 31. Using default: 3x3\n\n";
+                    }
+                } catch (...) {
+                    std::cout << "--> Invalid input. Using default: 3x3\n\n";
+                }
+            } else {
+                std::cout << "--> Using default: 3x3\n\n";
+            }
+        }
     }
 
     if (filter_size <= 0 || filter_size % 2 == 0) {
@@ -77,7 +130,7 @@ int main(int argc, char* argv[]) {
 
     std::cout << "Execution Mode : [" << mode << "]\n";
     std::cout << "Operation      : [" << op << "]\n";
-    if (op == "blur" || op == "both") {
+    if (op == "blur" || op == "both" || op == "gaussian") {
         std::cout << "Filter Size    : " << filter_size << "x" << filter_size 
                   << " (Radius: " << (filter_size / 2) << ")\n";
     }
@@ -97,7 +150,7 @@ int main(int argc, char* argv[]) {
         // 1. Load the Image
         std::cout << "[1] Loading input image...\n";
         Image input_img;
-        if (op == "blur") {
+        if (op == "blur" || op == "gaussian") {
             // Load as 1-channel grayscale directly if only blurring
             input_img = load_image(input_path, 1);
         } else {
@@ -236,10 +289,185 @@ int main(int argc, char* argv[]) {
             }
         }
 
+        // Stage 3: Gaussian Blur
+        if (op == "gaussian") {
+            Image g_input = input_img;
+            Image cpu_g, gpu_naive_g, gpu_tiled_g;
+
+            std::cout << "[3] Running " << filter_size << "x" << filter_size << " Gaussian Blur...\n";
+
+            if (mode == "cpu" || mode == "both") {
+                auto t0 = std::chrono::high_resolution_clock::now();
+                cpu_g = cpu::gaussian_blur(g_input, filter_size);
+                auto t1 = std::chrono::high_resolution_clock::now();
+                double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+                std::cout << "    CPU Gaussian Blur Time     : " << ms << " ms\n";
+            }
+
+            if (mode == "cuda" || mode == "both") {
+                CudaStream stream;
+                DeviceImage d_src = to_device(g_input, stream);
+
+                // Naive kernel timing
+                cudaEvent_t ev0, ev1;
+                CUDA_CHECK(cudaEventCreate(&ev0));
+                CUDA_CHECK(cudaEventCreate(&ev1));
+
+                CUDA_CHECK(cudaEventRecord(ev0, stream));
+                DeviceImage d_naive = cuda::gaussian_blur_naive(d_src, filter_size, stream);
+                CUDA_CHECK(cudaEventRecord(ev1, stream));
+                CUDA_CHECK(cudaEventSynchronize(ev1));
+
+                float naive_ms = 0.0f;
+                CUDA_CHECK(cudaEventElapsedTime(&naive_ms, ev0, ev1));
+                gpu_naive_g = to_host(d_naive, stream);
+                std::cout << "    CUDA Naive Gaussian Blur Time: " << naive_ms << " ms\n";
+
+                // Tiled kernel timing (16x16) - 3x3 has specialized tiled kernel
+                if (filter_size == 3) {
+                    CUDA_CHECK(cudaEventRecord(ev0, stream));
+                    DeviceImage d_tiled = cuda::gaussian_blur_tiled_3x3(d_src, cuda::TileConfig::TILE_16x16, stream);
+                    CUDA_CHECK(cudaEventRecord(ev1, stream));
+                    CUDA_CHECK(cudaEventSynchronize(ev1));
+
+                    float tiled_ms = 0.0f;
+                    CUDA_CHECK(cudaEventElapsedTime(&tiled_ms, ev0, ev1));
+                    gpu_tiled_g = to_host(d_tiled, stream);
+                    std::cout << "    CUDA Tiled Gaussian Blur Time: " << tiled_ms << " ms\n";
+                } else {
+                    gpu_tiled_g = gpu_naive_g;
+                }
+
+                CUDA_CHECK(cudaEventDestroy(ev0));
+                CUDA_CHECK(cudaEventDestroy(ev1));
+            }
+
+            if (mode == "both") {
+                cpu::ImageDiffStats stats_naive = cpu::compute_diff_stats(cpu_g, gpu_naive_g);
+                std::cout << "\n    Validation:\n"
+                          << "      - Naive CUDA Match: " << (100.0 * stats_naive.identical_pixels / stats_naive.total_pixels) << "%\n";
+                if (filter_size == 3) {
+                    cpu::ImageDiffStats stats_tiled = cpu::compute_diff_stats(cpu_g, gpu_tiled_g);
+                    std::cout << "      - Tiled CUDA Match: " << (100.0 * stats_tiled.identical_pixels / stats_tiled.total_pixels) << "%\n";
+                }
+
+                std::string k_tag = "_" + std::to_string(filter_size) + "x" + std::to_string(filter_size);
+                std::string cpu_save = (parent / (stem + "_gaussian" + k_tag + "_cpu" + ext)).string();
+                std::string naive_save = (parent / (stem + "_gaussian" + k_tag + "_naive_cuda" + ext)).string();
+
+                save_image(cpu_save, cpu_g);
+                save_image(naive_save, gpu_naive_g);
+                if (filter_size == 3) {
+                    std::string tiled_save = (parent / (stem + "_gaussian" + k_tag + "_tiled_cuda" + ext)).string();
+                    save_image(tiled_save, gpu_tiled_g);
+                    save_image(output_path, gpu_tiled_g);
+                } else {
+                    save_image(output_path, gpu_naive_g);
+                }
+
+                std::cout << "\n    Saved Gaussian Blurred Images:\n"
+                          << "      - Output Image    : " << output_path << "\n"
+                          << "      - CPU Reference   : " << cpu_save << "\n"
+                          << "      - CUDA Generated  : " << naive_save << "\n";
+            } else if (mode == "cpu") {
+                save_image(output_path, cpu_g);
+                std::cout << "    Saved CPU Gaussian Blur output to: " << output_path << "\n";
+            } else if (mode == "cuda") {
+                save_image(output_path, (filter_size == 3) ? gpu_tiled_g : gpu_naive_g);
+                std::cout << "    Saved CUDA Gaussian Blur output to: " << output_path << "\n";
+            }
+        }
+
+        // Stage 4: Sobel Edge Detection
+        if (op == "sobel") {
+            Image sobel_input = input_img;
+            if (sobel_input.channels == 3) {
+                std::cout << "    Input is 3-channel RGB. Converting to grayscale first for Sobel filter...\n";
+                sobel_input = cpu::rgb_to_grayscale(sobel_input);
+            }
+
+            Image cpu_sobel, gpu_naive_sobel, gpu_tiled_sobel;
+
+            std::cout << "[3] Running 3x3 Sobel Edge Detection (Gx, Gy, Magnitude = sqrt(Gx^2 + Gy^2))...\n";
+
+            if (mode == "cpu" || mode == "both") {
+                auto t0 = std::chrono::high_resolution_clock::now();
+                cpu_sobel = cpu::sobel_edge_detect(sobel_input);
+                auto t1 = std::chrono::high_resolution_clock::now();
+                double ms = std::chrono::duration<double, std::milli>(t1 - t0).count();
+                std::cout << "    CPU Sobel Edge Detect Time     : " << ms << " ms\n";
+            }
+
+            if (mode == "cuda" || mode == "both") {
+                CudaStream stream;
+                DeviceImage d_src = to_device(sobel_input, stream);
+
+                // Naive kernel timing
+                cudaEvent_t ev0, ev1;
+                CUDA_CHECK(cudaEventCreate(&ev0));
+                CUDA_CHECK(cudaEventCreate(&ev1));
+
+                CUDA_CHECK(cudaEventRecord(ev0, stream));
+                DeviceImage d_naive = cuda::sobel_edge_detect_naive(d_src, stream);
+                CUDA_CHECK(cudaEventRecord(ev1, stream));
+                CUDA_CHECK(cudaEventSynchronize(ev1));
+
+                float naive_ms = 0.0f;
+                CUDA_CHECK(cudaEventElapsedTime(&naive_ms, ev0, ev1));
+                gpu_naive_sobel = to_host(d_naive, stream);
+                std::cout << "    CUDA Naive Sobel Edge Time     : " << naive_ms << " ms\n";
+
+                // Tiled kernel timing (16x16)
+                CUDA_CHECK(cudaEventRecord(ev0, stream));
+                DeviceImage d_tiled = cuda::sobel_edge_detect_tiled(d_src, cuda::TileConfig::TILE_16x16, stream);
+                CUDA_CHECK(cudaEventRecord(ev1, stream));
+                CUDA_CHECK(cudaEventSynchronize(ev1));
+
+                float tiled_ms = 0.0f;
+                CUDA_CHECK(cudaEventElapsedTime(&tiled_ms, ev0, ev1));
+                gpu_tiled_sobel = to_host(d_tiled, stream);
+                std::cout << "    CUDA Tiled Sobel Edge Time     : " << tiled_ms << " ms\n";
+
+                CUDA_CHECK(cudaEventDestroy(ev0));
+                CUDA_CHECK(cudaEventDestroy(ev1));
+            }
+
+            if (mode == "both") {
+                cpu::ImageDiffStats stats_naive = cpu::compute_diff_stats(cpu_sobel, gpu_naive_sobel);
+                cpu::ImageDiffStats stats_tiled = cpu::compute_diff_stats(cpu_sobel, gpu_tiled_sobel);
+
+                std::cout << "\n    Validation:\n"
+                          << "      - Naive CUDA Match: " << (100.0 * stats_naive.identical_pixels / stats_naive.total_pixels) << "%\n"
+                          << "      - Tiled CUDA Match: " << (100.0 * stats_tiled.identical_pixels / stats_tiled.total_pixels) << "%\n";
+
+                std::string cpu_save = (parent / (stem + "_sobel_cpu" + ext)).string();
+                std::string naive_save = (parent / (stem + "_sobel_naive_cuda" + ext)).string();
+                std::string tiled_save = (parent / (stem + "_sobel_tiled_cuda" + ext)).string();
+
+                save_image(cpu_save, cpu_sobel);
+                save_image(naive_save, gpu_naive_sobel);
+                save_image(tiled_save, gpu_tiled_sobel);
+                save_image(output_path, gpu_tiled_sobel);
+
+                std::cout << "\n    Saved Sobel Edge-Detected Images:\n"
+                          << "      - Output Image    : " << output_path << "\n"
+                          << "      - CPU Reference   : " << cpu_save << "\n"
+                          << "      - Naive CUDA      : " << naive_save << "\n"
+                          << "      - Tiled CUDA      : " << tiled_save << "\n";
+            } else if (mode == "cpu") {
+                save_image(output_path, cpu_sobel);
+                std::cout << "    Saved CPU Sobel output to: " << output_path << "\n";
+            } else if (mode == "cuda") {
+                save_image(output_path, gpu_tiled_sobel);
+                std::cout << "    Saved CUDA Sobel output to: " << output_path << "\n";
+            }
+        }
+
         return 0;
     } catch (const std::exception& e) {
         std::cerr << "Fatal Error: " << e.what() << "\n";
         return 1;
     }
 }
+
 

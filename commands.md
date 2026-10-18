@@ -7,9 +7,8 @@ This document provides ready-to-run commands for processing your own images, run
 ## 1. Prerequisites & Building the Project
 
 Before running commands, ensure the project is built in `Release` mode:
-
+(Build the entire project from PowerShell in the project root)
 ```powershell
-# Build the entire project from PowerShell in the project root
 cmake --build build --config Release
 ```
 
@@ -35,7 +34,7 @@ The main CLI tool is located at `.\build\Release\cuda_image_app.exe`.
 | `--output <path>` | File path (`.png`, `.jpg`, `.bmp`) | `images/output/result.png` | Path to save processed image |
 | `--op <type>` | `grayscale`, `blur`, `gaussian`, `sobel`, `both` | `both` | Image processing operation to execute |
 | `--mode <target>` | `cuda`, `cpu`, `both` | `both` | Hardware target (comparing `both` benchmarks and verifies accuracy) |
-| `--filter-size <N>`| Odd positive integer (`3`, `5`, `7`, ...) | `3` | Filter window dimension for mean blur |
+| `--filter-size <N>`| Odd positive integer (`3`, `5`, `7`, `9`, ..., `21`, `31`) | `3` | Filter window dimension for mean or Gaussian blur |
 | `--help` | | | Display usage information |
 
 ---
@@ -59,16 +58,24 @@ Extracts horizontal and vertical edge gradients and computes the edge magnitude 
 .\build\Release\cuda_image_app.exe --mode cuda --op sobel --input "C:\path\to\my_photo.jpg" --output "images/output/my_photo_edges.png"
 ```
 
-#### 4. 3x3 Gaussian Blur
-Applies a weighted Gaussian filter with normalized coefficients $\frac{1}{16} \begin{bmatrix} 1 & 2 & 1 \\ 2 & 4 & 2 \\ 1 & 2 & 1 \end{bmatrix}$:
+#### 4. Gaussian Blur (Interactive or Configurable Filter Size up to 21x21)
+Applies a normalized Gaussian filter. If `--filter-size` is omitted, the app interactively asks you to choose the filter size (supports odd values like 3, 5, 7, 9, 15, 21):
 ```powershell
-.\build\Release\cuda_image_app.exe --op gaussian --input "C:\path\to\my_photo.jpg" --output "images/output/my_photo_gaussian.png"
+# Interactive (prompts in console, e.g. type 21)
+.\build\Release\cuda_image_app.exe --mode cuda --op gaussian --input "images/input/panda.jpg" --output "images/output/panda_gaussian21.jpg"
+
+# Or pass explicitly on the command line:
+.\build\Release\cuda_image_app.exe --mode cuda --op gaussian --filter-size 21 --input "images/input/panda.jpg" --output "images/output/panda_gaussian21.jpg"
 ```
 
-#### 5. Configurable Mean Blur (Box Filter)
-Applies a 5x5 box filter (radius 2) with clamp-to-edge boundary condition:
+#### 5. Mean Blur / Box Filter (Interactive or Configurable Filter Size up to 21x21)
+Applies a spatial box filter. If `--filter-size` is omitted, the app interactively prompts you for the filter size:
 ```powershell
-.\build\Release\cuda_image_app.exe --op blur --filter-size 5 --input "C:\path\to\my_photo.jpg" --output "images/output/my_photo_blur5x5.png"
+# Interactive (prompts in console, e.g. type 21)
+.\build\Release\cuda_image_app.exe --mode cuda --op blur --input "images/input/panda.jpg" --output "images/output/panda_blur21.jpg"
+
+# Or pass explicitly on the command line:
+.\build\Release\cuda_image_app.exe --mode cuda --op blur --filter-size 21 --input "images/input/panda.jpg" --output "images/output/panda_blur21.jpg"
 ```
 
 #### 6. High-Performance GPU-Only Mode
